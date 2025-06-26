@@ -6,7 +6,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def generate_sample_data(n_users=1000, n_items=500, n_interactions=10000, 
+def generate_sample_data(n_users=2000, n_items=4500, n_interactions=50000, 
                         sparsity=0.95, random_state=42):
     """
     Generate synthetic implicit feedback data for demonstration.
@@ -36,14 +36,14 @@ def generate_sample_data(n_users=1000, n_items=500, n_interactions=10000,
     popular_items = np.random.choice(item_ids, size=int(0.2 * n_items), replace=False)
     regular_items = np.setdiff1d(item_ids, popular_items)
     
-    # Active users (30% of users generate 70% of interactions)
-    active_users = np.random.choice(user_ids, size=int(0.3 * n_users), replace=False)
+    # Active users (50% of users generate 80% of interactions) - reduces cold users
+    active_users = np.random.choice(user_ids, size=int(0.5 * n_users), replace=False)
     regular_users = np.setdiff1d(user_ids, active_users)
     
     interactions_generated = 0
     
     # Generate interactions for active users with popular items
-    while interactions_generated < int(0.6 * n_interactions):
+    while interactions_generated < int(0.8 * n_interactions):
         user_id = np.random.choice(active_users)
         item_id = np.random.choice(popular_items)
         
@@ -59,13 +59,18 @@ def generate_sample_data(n_users=1000, n_items=500, n_interactions=10000,
         
         interactions_generated += 1
     
-    # Generate remaining interactions
+    # Generate remaining interactions (focus on regular users to reduce cold start)
     while interactions_generated < n_interactions:
-        user_id = np.random.choice(user_ids)
+        # 70% chance to pick from regular users, 30% from all users
+        if np.random.random() < 0.7:
+            user_id = np.random.choice(regular_users)
+        else:
+            user_id = np.random.choice(user_ids)
+        
         item_id = np.random.choice(item_ids)
         
-        # Lower ratings for regular interactions
-        rating = np.random.choice([1, 2, 3], p=[0.5, 0.3, 0.2])
+        # Slightly higher ratings for regular interactions to reduce cold users
+        rating = np.random.choice([1, 2, 3, 4], p=[0.3, 0.3, 0.3, 0.1])
         
         interactions.append({
             'user_id': user_id,

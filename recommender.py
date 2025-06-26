@@ -100,16 +100,25 @@ class ImplicitRecommender:
         
         user_idx = user_mapping[user_id]
         
-        # Get recommendations from the model
-        item_user_matrix = user_item_matrix.T.tocsr()
-        
+        # Generate recommendations using matrix factorization
         try:
-            recommended_items, scores = self.model.recommend(
-                user_idx, 
-                user_item_matrix[user_idx],
-                N=n_recommendations,
-                filter_already_liked_items=True
-            )
+            # Get user embedding and compute scores for all items
+            user_embedding = self.user_factors[user_idx]
+            item_scores = np.dot(user_embedding, self.item_factors.T)
+            
+            # Get items the user has already interacted with
+            user_items = set(user_item_matrix[user_idx].nonzero()[1])
+            
+            # Create list of (item_idx, score) pairs, filtering out already seen items
+            item_score_pairs = []
+            for item_idx, score in enumerate(item_scores):
+                if item_idx not in user_items:
+                    item_score_pairs.append((item_idx, score))
+            
+            # Sort by score and get top N
+            item_score_pairs.sort(key=lambda x: x[1], reverse=True)
+            top_items = item_score_pairs[:n_recommendations]
+            
         except Exception as e:
             logger.error(f"Error generating recommendations: {e}")
             return self._get_cold_start_recommendations(
@@ -120,7 +129,7 @@ class ImplicitRecommender:
         reverse_item_mapping = {idx: item for item, idx in item_mapping.items()}
         
         recommendations = []
-        for item_idx, score in zip(recommended_items, scores):
+        for item_idx, score in top_items:
             item_id = reverse_item_mapping[item_idx]
             
             explanation = None

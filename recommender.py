@@ -114,9 +114,11 @@ class ImplicitRecommender:
         item_user_matrix = user_item_matrix.T.tocsr()
         
         try:
+            # Convert numpy types to Python native types for compatibility
+            user_idx_int = int(user_idx)
             recommended_items, scores = self.model.recommend(
-                user_idx, 
-                user_item_matrix[user_idx],
+                user_idx_int, 
+                user_item_matrix[user_idx_int],
                 N=n_recommendations,
                 filter_already_liked_items=True
             )
@@ -131,7 +133,9 @@ class ImplicitRecommender:
         
         recommendations = []
         for item_idx, score in zip(recommended_items, scores):
-            item_id = reverse_item_mapping[item_idx]
+            # Convert numpy types to Python native types for compatibility
+            item_idx_int = int(item_idx)
+            item_id = reverse_item_mapping[item_idx_int]
             
             explanation = None
             if include_explanations:

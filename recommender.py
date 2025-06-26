@@ -1,9 +1,7 @@
 import numpy as np
 from scipy.sparse import csr_matrix
-import implicit
-from implicit.als import AlternatingLeastSquares
-from implicit.bpr import BayesianPersonalizedRanking
-from implicit.lmf import LogisticMatrixFactorization
+from sklearn.decomposition import NMF
+from sklearn.metrics.pairwise import cosine_similarity
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -11,16 +9,17 @@ logger = logging.getLogger(__name__)
 
 class ImplicitRecommender:
     """
-    Wrapper class for implicit feedback recommendation algorithms.
+    Matrix factorization-based recommendation system for implicit feedback.
+    Uses Non-negative Matrix Factorization (NMF) as the core algorithm.
     """
     
-    def __init__(self, algorithm='als', factors=50, regularization=0.1, 
+    def __init__(self, algorithm='nmf', factors=50, regularization=0.1, 
                  iterations=20, alpha=15, random_state=42):
         """
         Initialize the recommender.
         
         Args:
-            algorithm (str): Algorithm to use ('als', 'bpr', 'lmf')
+            algorithm (str): Algorithm to use ('nmf', 'als', 'bpr', 'lmf')
             factors (int): Number of latent factors
             regularization (float): Regularization parameter
             iterations (int): Number of training iterations
@@ -34,33 +33,19 @@ class ImplicitRecommender:
         self.alpha = alpha
         self.random_state = random_state
         
-        # Initialize the model based on algorithm
-        if algorithm == 'als':
-            self.model = AlternatingLeastSquares(
-                factors=factors,
-                regularization=regularization,
-                iterations=iterations,
-                alpha=alpha,
-                random_state=random_state
-            )
-        elif algorithm == 'bpr':
-            self.model = BayesianPersonalizedRanking(
-                factors=factors,
-                regularization=regularization,
-                iterations=iterations,
-                random_state=random_state
-            )
-        elif algorithm == 'lmf':
-            self.model = LogisticMatrixFactorization(
-                factors=factors,
-                regularization=regularization,
-                iterations=iterations,
-                random_state=random_state
-            )
-        else:
-            raise ValueError(f"Unknown algorithm: {algorithm}")
+        # Initialize NMF model (using sklearn's implementation)
+        self.model = NMF(
+            n_components=factors,
+            init='random',
+            random_state=random_state,
+            max_iter=iterations,
+            alpha_W=regularization,
+            alpha_H=regularization
+        )
         
         self.is_fitted = False
+        self.user_factors = None
+        self.item_factors = None
         logger.info(f"Initialized {algorithm} recommender with {factors} factors")
     
     def fit(self, user_item_matrix):
@@ -72,11 +57,16 @@ class ImplicitRecommender:
         """
         logger.info("Training recommendation model...")
         
-        # Ensure matrix is in the right format (items x users for implicit library)
-        item_user_matrix = user_item_matrix.T.tocsr()
+        # Convert to dense matrix for NMF (it requires non-negative values)
+        dense_matrix = user_item_matrix.toarray()
         
-        # Fit the model
-        self.model.fit(item_user_matrix, show_progress=True)
+        # Apply confidence weighting for implicit feedback
+        confidence_matrix = 1 + self.alpha * dense_matrix
+        
+        # Fit the NMF model
+        self.user_factors = self.model.fit_transform(confidence_matrix)
+        self.item_factors = self.model.components_.T
+        
         self.is_fitted = True
         self.user_item_matrix = user_item_matrix
         

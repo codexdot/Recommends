@@ -13,6 +13,7 @@ from evaluator import RecommendationEvaluator
 from cold_start_handler import ColdStartHandler
 from model_manager import ModelManager
 from utils import generate_sample_data, format_recommendations
+from download_helper import force_download_button, create_download_link
 import os
 import tempfile
 import json
@@ -385,20 +386,21 @@ def model_training_page():
                             )
                             st.success(f"Complete model package saved as: {saved_path}")
                             
-                            # Provide download link
-                            try:
-                                with open(saved_path, 'rb') as f:
-                                    file_data = f.read()
-                                st.download_button(
-                                    label="Download Complete Package",
-                                    data=file_data,
-                                    file_name=os.path.basename(saved_path),
-                                    mime="application/zip",
-                                    key="download_package"
-                                )
-                            except Exception as download_error:
-                                st.error(f"Download error: {download_error}")
-                                st.info(f"File saved locally at: {saved_path}")
+                            # Enhanced download functionality
+                            if force_download_button(
+                                file_path=saved_path,
+                                button_label="Download Complete Package",
+                                file_name=os.path.basename(saved_path)
+                            ):
+                                st.success("Download initiated! Check your downloads folder.")
+                            
+                            # Alternative download link
+                            download_link = create_download_link(
+                                file_path=saved_path,
+                                download_name=os.path.basename(saved_path),
+                                link_text="Alternative Download Link"
+                            )
+                            st.markdown(download_link, unsafe_allow_html=True)
                         except Exception as e:
                             st.error(f"Error saving complete package: {e}")
                 
@@ -412,20 +414,21 @@ def model_training_page():
                             saved_path = st.session_state.recommender.save_model()
                             st.success(f"Model saved as: {saved_path}")
                             
-                            # Provide download link
-                            try:
-                                with open(saved_path, 'rb') as f:
-                                    file_data = f.read()
-                                st.download_button(
-                                    label="Download Model File",
-                                    data=file_data,
-                                    file_name=os.path.basename(saved_path),
-                                    mime="application/octet-stream",
-                                    key="download_model_only"
-                                )
-                            except Exception as download_error:
-                                st.error(f"Download error: {download_error}")
-                                st.info(f"File saved locally at: {saved_path}")
+                            # Enhanced model download
+                            if force_download_button(
+                                file_path=saved_path,
+                                button_label="Download Model File",
+                                file_name=os.path.basename(saved_path)
+                            ):
+                                st.success("Download initiated! Check your downloads folder.")
+                            
+                            # Alternative download link
+                            download_link = create_download_link(
+                                file_path=saved_path,
+                                download_name=os.path.basename(saved_path),
+                                link_text="Alternative Download Link"
+                            )
+                            st.markdown(download_link, unsafe_allow_html=True)
                         except Exception as e:
                             st.error(f"Error saving model: {e}")
                     
@@ -436,15 +439,29 @@ def model_training_page():
                             model_info = st.session_state.recommender.export_model_info()
                             st.json(model_info)
                             
-                            # Provide download for JSON
+                            # Enhanced JSON download
+                            from datetime import datetime
                             json_str = json.dumps(model_info, indent=2)
-                            st.download_button(
-                                label="Download Model Info (JSON)",
-                                data=json_str,
-                                file_name=f"model_info_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                                mime="application/json",
-                                key="download_info"
-                            )
+                            json_filename = f"model_info_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                            
+                            # Create temporary file for JSON
+                            import tempfile
+                            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_file:
+                                tmp_file.write(json_str)
+                                json_path = tmp_file.name
+                            
+                            if force_download_button(
+                                file_path=json_path,
+                                button_label="Download Model Info (JSON)",
+                                file_name=json_filename
+                            ):
+                                st.success("JSON download initiated!")
+                            
+                            # Cleanup
+                            try:
+                                os.unlink(json_path)
+                            except:
+                                pass
                         except Exception as e:
                             st.error(f"Error exporting model info: {e}")
                 

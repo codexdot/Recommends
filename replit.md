@@ -124,13 +124,6 @@ This is a Streamlit-based web application that implements an implicit feedback r
 - Enhanced recommendation explanations with detailed reasoning and confidence metrics
 - Fixed index bounds errors and data serialization issues for stability
 - Integrated cold start handler with multi-strategy recommendations for new users
-- Updated sample data generation (June 26, 2025): Optimized for ALS algorithm performance targets
-  - Target specifications: 2,094 users, 4,577 items, 51,024 interactions
-  - Performance goals: Precision@k > 0.35, Recall@k > 0.5, NDCG@k > 0.6, Coverage > 80%
-  - ALS parameters: regularization=0.1, factors=50, iterations=20, alpha=15, test_split=20%
-  - Four-phase data generation: power users + blockbusters (30%), active users + popular items (35%), coverage boost with niche items (20%), strategic patterns (15%)
-  - User segmentation: 10% power users, 40% active users, 50% regular users
-  - Item tiers: 20% blockbuster items, 30% popular items, 50% niche items for high coverage
 
 ## User Preferences
 

@@ -2,7 +2,7 @@ modules = ["python-3.11"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["glibcLocales", "libxcrypt", "pkg-config", "xsimd", "gcc"]
+packages = ["gcc", "gfortran", "glibcLocales", "libxcrypt", "llvmPackages.openmp", "pkg-config", "xsimd", "glibc", "gcc-unwrapped", "libgcc"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -26,7 +26,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "uv add pandas numpy scipy scikit-learn plotly implicit && streamlit run app.py --server.port 5000"
+args = "export OMP_NUM_THREADS=1 && export OPENBLAS_NUM_THREADS=1 && export MKL_NUM_THREADS=1 && streamlit run app.py --server.port 5000"
 waitForPort = 5000
 
 [[ports]]

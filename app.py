@@ -364,7 +364,7 @@ def evaluation_page():
                 for k in [5, 10, 20]:
                     precision_data.append({
                         'K': k,
-                        'Precision': results[f'precision_at_{k}']
+                        'Precision': float(results[f'precision_at_{k}'])
                     })
                 
                 df_precision = pd.DataFrame(precision_data)
@@ -378,7 +378,7 @@ def evaluation_page():
                 for k in [5, 10, 20]:
                     recall_data.append({
                         'K': k,
-                        'Recall': results[f'recall_at_{k}']
+                        'Recall': float(results[f'recall_at_{k}'])
                     })
                 
                 df_recall = pd.DataFrame(recall_data)
@@ -392,7 +392,7 @@ def evaluation_page():
             for k in [5, 10, 20]:
                 ndcg_data.append({
                     'K': k,
-                    'NDCG': results[f'ndcg_at_{k}']
+                    'NDCG': float(results[f'ndcg_at_{k}'])
                 })
             
             df_ndcg = pd.DataFrame(ndcg_data)

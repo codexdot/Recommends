@@ -110,6 +110,13 @@ class ImplicitRecommender:
         
         user_idx = user_mapping[user_id]
         
+        # Validate user index bounds
+        if user_idx >= user_item_matrix.shape[0]:
+            logger.error(f"User index {user_idx} out of bounds for matrix shape {user_item_matrix.shape}")
+            return self._get_cold_start_recommendations(
+                user_item_matrix, item_mapping, n_recommendations, include_explanations
+            )
+        
         # Get recommendations from the model
         item_user_matrix = user_item_matrix.T.tocsr()
         
@@ -135,6 +142,12 @@ class ImplicitRecommender:
         for item_idx, score in zip(recommended_items, scores):
             # Convert numpy types to Python native types for compatibility
             item_idx_int = int(item_idx)
+            
+            # Check if item index is valid
+            if item_idx_int not in reverse_item_mapping:
+                logger.warning(f"Item index {item_idx_int} not found in mapping, skipping")
+                continue
+                
             item_id = reverse_item_mapping[item_idx_int]
             
             explanation = None

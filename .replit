@@ -2,7 +2,7 @@ modules = ["python-3.11"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["gcc", "gfortran", "glibcLocales", "libxcrypt", "llvmPackages.openmp", "pkg-config", "xsimd", "glibc", "gcc-unwrapped", "libgcc"]
+packages = ["gcc", "gcc-unwrapped", "gfortran", "glibc", "glibcLocales", "libgcc", "libxcrypt", "llvmPackages.openmp", "pkg-config", "xsimd"]
 
 [deployment]
 deploymentTarget = "autoscale"

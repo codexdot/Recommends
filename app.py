@@ -112,13 +112,11 @@ def data_overview_page():
         with col1:
             st.metric("Total Interactions", f"{len(df):,}")
         with col2:
-            n_users = len(df['user_id'].unique())
-            st.metric("Unique Users", f"{n_users:,}")
+            st.metric("Unique Users", f"{len(df['user_id'].unique()):,}")
         with col3:
-            n_items = len(df['item_id'].unique())
-            st.metric("Unique Items", f"{n_items:,}")
+            st.metric("Unique Items", f"{len(df['item_id'].unique()):,}")
         with col4:
-            sparsity = 1 - (len(df) / (n_users * n_items))
+            sparsity = 1 - (len(df) / (len(df['user_id'].unique()) * len(df['item_id'].unique())))
             st.metric("Sparsity", f"{sparsity:.2%}")
         
         # Data preview

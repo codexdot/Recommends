@@ -64,7 +64,7 @@ def data_overview_page():
     with col1:
         data_source = st.selectbox(
             "Select data source:",
-            ["Generate Sample Data", "Upload CSV File"]
+            ["Generate Sample Data", "Upload CSV File", "Load Saved Model"]
         )
     
     with col2:
@@ -76,8 +76,10 @@ def data_overview_page():
                     st.session_state.interactions_df = interactions_df
                     st.session_state.data_loaded = True
                     st.success("Sample data generated successfully!")
-                else:
+                elif data_source == "Upload CSV File":
                     st.info("Please upload a CSV file with columns: user_id, item_id, rating (implicit feedback score)")
+                else:  # Load Saved Model
+                    st.info("Please upload a model file below")
     
     # File upload for custom data
     if data_source == "Upload CSV File":
@@ -100,6 +102,107 @@ def data_overview_page():
                     st.error(f"Please ensure your CSV has columns: {required_columns}")
             except Exception as e:
                 st.error(f"Error loading file: {str(e)}")
+    
+    # Model loading section
+    if data_source == "Load Saved Model":
+        st.subheader("📂 Load Saved Model")
+        
+        uploaded_model = st.file_uploader(
+            "Upload a model file",
+            type=['pkl', 'zip'],
+            help="Upload a .zip file (complete package) or .pkl file (model only)"
+        )
+        
+        if uploaded_model is not None:
+            file_extension = uploaded_model.name.split('.')[-1].lower()
+            
+            if file_extension == 'zip':
+                st.write("**Complete Model Package Detected**")
+                if st.button("Load Complete Package", type="primary", key="load_package_overview"):
+                    try:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+                            tmp_file.write(uploaded_model.read())
+                            tmp_path = tmp_file.name
+                        
+                        manager = ModelManager()
+                        model_package = manager.load_complete_model(tmp_path)
+                        
+                        # Set up session state with all components
+                        st.session_state.recommender = model_package['recommender']
+                        st.session_state.user_mapping = model_package['user_mapping']
+                        st.session_state.item_mapping = model_package['item_mapping']
+                        st.session_state.user_item_matrix = model_package['user_item_matrix']
+                        st.session_state.model_trained = True
+                        st.session_state.data_loaded = True
+                        
+                        if model_package['cold_start_handler']:
+                            st.session_state.cold_start_handler = model_package['cold_start_handler']
+                        
+                        if model_package['evaluation_results']:
+                            st.session_state.evaluation_results = model_package['evaluation_results']
+                        
+                        # Create interactions dataframe from user_item_matrix for display
+                        user_item_matrix = model_package['user_item_matrix']
+                        user_mapping = model_package['user_mapping']
+                        item_mapping = model_package['item_mapping']
+                        
+                        # Convert sparse matrix back to dataframe
+                        rows, cols = user_item_matrix.nonzero()
+                        data = []
+                        reverse_user_mapping = {v: k for k, v in user_mapping.items()}
+                        reverse_item_mapping = {v: k for k, v in item_mapping.items()}
+                        
+                        for row_idx, col_idx in zip(rows, cols):
+                            user_id = reverse_user_mapping[row_idx]
+                            item_id = reverse_item_mapping[col_idx]
+                            rating = user_item_matrix[row_idx, col_idx]
+                            data.append({'user_id': user_id, 'item_id': item_id, 'rating': rating})
+                        
+                        st.session_state.interactions_df = pd.DataFrame(data)
+                        
+                        st.success("Complete model package loaded successfully!")
+                        
+                        # Display package info
+                        metadata = model_package['metadata']
+                        col1_info, col2_info, col3_info = st.columns(3)
+                        with col1_info:
+                            st.metric("Algorithm", metadata['model_algorithm'].upper())
+                        with col2_info:
+                            st.metric("Users", metadata['n_users'])
+                        with col3_info:
+                            st.metric("Items", metadata['n_items'])
+                        
+                        os.unlink(tmp_path)
+                        
+                    except Exception as e:
+                        st.error(f"Error loading complete package: {e}")
+            else:
+                st.write("**Model File Detected**")
+                st.warning("PKL files contain only the model. You'll need training data to use all features.")
+                if st.button("Load Model", type="secondary", key="load_model_overview"):
+                    try:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.pkl') as tmp_file:
+                            tmp_file.write(uploaded_model.read())
+                            tmp_path = tmp_file.name
+                        
+                        loaded_recommender = ImplicitRecommender()
+                        model_metadata = loaded_recommender.load_model(tmp_path)
+                        
+                        st.session_state.recommender = loaded_recommender
+                        st.session_state.model_trained = True
+                        
+                        st.success("Model loaded successfully!")
+                        
+                        col1_info, col2_info = st.columns(2)
+                        with col1_info:
+                            st.metric("Algorithm", model_metadata['algorithm'].upper())
+                        with col2_info:
+                            st.metric("Factors", model_metadata['factors'])
+                        
+                        os.unlink(tmp_path)
+                        
+                    except Exception as e:
+                        st.error(f"Error loading model: {e}")
     
     # Display data overview if loaded
     if st.session_state.data_loaded:
@@ -164,88 +267,6 @@ def model_training_page():
     if not st.session_state.data_loaded:
         st.warning("Please load data first from the Data Overview page.")
         return
-    
-    # Model loading section
-    st.subheader("📂 Load Existing Model")
-    
-    uploaded_model = st.file_uploader(
-        "Upload a model file",
-        type=['pkl', 'zip'],
-        help="Upload a .zip file (complete package) or .pkl file (model only)"
-    )
-    
-    if uploaded_model is not None:
-        # Determine file type and show appropriate options
-        file_extension = uploaded_model.name.split('.')[-1].lower()
-        
-        # Load button based on file type
-        if file_extension == 'zip':
-            st.write("**Complete Model Package Detected**")
-            if st.button("Load Complete Package", type="primary"):
-                try:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
-                        tmp_file.write(uploaded_model.read())
-                        tmp_path = tmp_file.name
-                    
-                    manager = ModelManager()
-                    model_package = manager.load_complete_model(tmp_path)
-                    
-                    # Set up session state with all components
-                    st.session_state.recommender = model_package['recommender']
-                    st.session_state.user_mapping = model_package['user_mapping']
-                    st.session_state.item_mapping = model_package['item_mapping']
-                    st.session_state.user_item_matrix = model_package['user_item_matrix']
-                    st.session_state.model_trained = True
-                    
-                    if model_package['cold_start_handler']:
-                        st.session_state.cold_start_handler = model_package['cold_start_handler']
-                    
-                    if model_package['evaluation_results']:
-                        st.session_state.evaluation_results = model_package['evaluation_results']
-                    
-                    st.success("Complete model package loaded successfully!")
-                    
-                    # Display package info
-                    metadata = model_package['metadata']
-                    col1_info, col2_info, col3_info = st.columns(3)
-                    with col1_info:
-                        st.metric("Algorithm", metadata['model_algorithm'].upper())
-                    with col2_info:
-                        st.metric("Users", metadata['n_users'])
-                    with col3_info:
-                        st.metric("Items", metadata['n_items'])
-                    
-                    os.unlink(tmp_path)
-                    
-                except Exception as e:
-                    st.error(f"Error loading complete package: {e}")
-        else:
-            st.write("**Model File Detected**")
-            if st.button("Load Model", type="secondary"):
-                try:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pkl') as tmp_file:
-                        tmp_file.write(uploaded_model.read())
-                        tmp_path = tmp_file.name
-                    
-                    loaded_recommender = ImplicitRecommender()
-                    model_metadata = loaded_recommender.load_model(tmp_path)
-                    
-                    st.session_state.recommender = loaded_recommender
-                    st.session_state.model_trained = True
-                    
-                    st.success("Model loaded successfully!")
-                    st.warning("Note: Only the model was loaded. Train with data to enable recommendations.")
-                    
-                    col1_info, col2_info = st.columns(2)
-                    with col1_info:
-                        st.metric("Algorithm", model_metadata['algorithm'].upper())
-                    with col2_info:
-                        st.metric("Factors", model_metadata['factors'])
-                    
-                    os.unlink(tmp_path)
-                    
-                except Exception as e:
-                    st.error(f"Error loading model: {e}")
     
     st.divider()
     
@@ -365,14 +386,19 @@ def model_training_page():
                             st.success(f"Complete model package saved as: {saved_path}")
                             
                             # Provide download link
-                            with open(saved_path, 'rb') as f:
+                            try:
+                                with open(saved_path, 'rb') as f:
+                                    file_data = f.read()
                                 st.download_button(
                                     label="Download Complete Package",
-                                    data=f.read(),
+                                    data=file_data,
                                     file_name=os.path.basename(saved_path),
                                     mime="application/zip",
                                     key="download_package"
                                 )
+                            except Exception as download_error:
+                                st.error(f"Download error: {download_error}")
+                                st.info(f"File saved locally at: {saved_path}")
                         except Exception as e:
                             st.error(f"Error saving complete package: {e}")
                 
@@ -387,14 +413,19 @@ def model_training_page():
                             st.success(f"Model saved as: {saved_path}")
                             
                             # Provide download link
-                            with open(saved_path, 'rb') as f:
+                            try:
+                                with open(saved_path, 'rb') as f:
+                                    file_data = f.read()
                                 st.download_button(
                                     label="Download Model File",
-                                    data=f.read(),
-                                    file_name=saved_path,
+                                    data=file_data,
+                                    file_name=os.path.basename(saved_path),
                                     mime="application/octet-stream",
                                     key="download_model_only"
                                 )
+                            except Exception as download_error:
+                                st.error(f"Download error: {download_error}")
+                                st.info(f"File saved locally at: {saved_path}")
                         except Exception as e:
                             st.error(f"Error saving model: {e}")
                     
@@ -406,13 +437,11 @@ def model_training_page():
                             st.json(model_info)
                             
                             # Provide download for JSON
-                            import json
-                            import datetime
                             json_str = json.dumps(model_info, indent=2)
                             st.download_button(
                                 label="Download Model Info (JSON)",
                                 data=json_str,
-                                file_name=f"model_info_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                                file_name=f"model_info_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                                 mime="application/json",
                                 key="download_info"
                             )

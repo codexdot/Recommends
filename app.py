@@ -320,34 +320,70 @@ def recommendations_page():
             
             st.write(f"**Recommendations for User {user_id}:**")
             
-            # Display recommendations in a nice format
+            # Display recommendations in enhanced format
             for i, (item_id, score, explanation) in enumerate(recommendations, 1):
                 with st.container():
-                    col_rank, col_item, col_score = st.columns([1, 6, 2])
+                    # Create an attractive card-like layout
+                    st.markdown(f"""
+                    <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin: 10px 0; background-color: #f9f9f9;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h4 style="margin: 0; color: #1f77b4;">#{i} Item {item_id}</h4>
+                            <span style="background-color: #1f77b4; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                Score: {score:.3f}
+                            </span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                     
-                    with col_rank:
-                        st.write(f"**#{i}**")
+                    if include_explanations and explanation:
+                        st.markdown(f"💡 **Why this recommendation?**")
+                        st.markdown(f"_{explanation}_")
                     
-                    with col_item:
-                        st.write(f"**Item {item_id}**")
-                        if include_explanations and explanation:
-                            st.caption(explanation)
-                    
-                    with col_score:
-                        st.metric("Score", f"{score:.3f}")
-                    
-                    st.divider()
+            
+            # Recommendation insights and user history
+            st.subheader("📊 Recommendation Insights")
+            
+            # Calculate recommendation statistics
+            scores = [score for _, score, _ in recommendations]
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                avg_score = np.mean(scores) if scores else 0
+                st.metric("Average Confidence", f"{avg_score:.3f}")
+                
+            with col2:
+                score_range = max(scores) - min(scores) if len(scores) > 1 else 0
+                st.metric("Score Range", f"{score_range:.3f}")
+                
+            with col3:
+                recommendation_type = "Cold Start" if user_id == "New User (Cold Start)" else "Personalized"
+                st.metric("Recommendation Type", recommendation_type)
             
             # Show user's interaction history
-            st.subheader("User's Interaction History")
-            user_history = st.session_state.interactions_df[
-                st.session_state.interactions_df['user_id'] == user_id
-            ].sort_values('rating', ascending=False)
-            
-            if not user_history.empty:
-                st.dataframe(user_history, use_container_width=True)
+            if user_id != "New User (Cold Start)":
+                st.subheader("📈 User's Interaction History")
+                user_history = st.session_state.interactions_df[
+                    st.session_state.interactions_df['user_id'] == user_id
+                ].sort_values('rating', ascending=False)
+                
+                if not user_history.empty:
+                    st.dataframe(user_history.head(10), use_container_width=True)
+                    st.caption(f"Showing top 10 of {len(user_history)} total interactions")
+                else:
+                    st.info("This user has no interaction history")
             else:
-                st.info("This user has no interaction history (cold start scenario)")
+                st.subheader("🆕 Cold Start Information")
+                st.info("These recommendations are designed for new users without interaction history. They combine popular, diverse, and trending items to help you discover content you might enjoy.")
+                
+                if 'cold_start_handler' in st.session_state:
+                    stats = st.session_state.cold_start_handler.get_cold_start_statistics()
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Available Popular Items", stats['popular_items_count'])
+                    with col2:
+                        st.metric("Item Categories", stats['item_clusters'])
 
 def evaluation_page():
     st.header("📈 Model Evaluation")

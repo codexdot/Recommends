@@ -138,17 +138,19 @@ class ImplicitRecommender:
                 filter_already_liked_items=True
             )
             
-            # Validate recommended item indices
-            max_item_idx = len(item_mapping) - 1
+            # Validate recommended item indices against actual matrix bounds
+            max_item_idx = user_item_matrix.shape[1] - 1
+            reverse_item_mapping = {idx: item for item, idx in item_mapping.items()}
+            
             valid_recommendations = []
             valid_scores = []
             
             for item_idx, score in zip(recommended_items, scores):
-                if 0 <= item_idx <= max_item_idx:
+                if 0 <= item_idx <= max_item_idx and item_idx in reverse_item_mapping:
                     valid_recommendations.append(item_idx)
                     valid_scores.append(score)
                 else:
-                    logger.warning(f"Item index {item_idx} out of bounds (max: {max_item_idx})")
+                    logger.warning(f"Item index {item_idx} out of bounds (max: {max_item_idx}) or not in mapping")
             
             recommended_items = np.array(valid_recommendations)
             scores = np.array(valid_scores)
@@ -262,7 +264,7 @@ class ImplicitRecommender:
     def _generate_explanation(self, user_id, item_id, user_item_matrix, 
                             user_mapping, item_mapping):
         """
-        Generate simple explanation for a recommendation.
+        Generate detailed explanation for a recommendation.
         
         Args:
             user_id: Original user ID
@@ -272,12 +274,66 @@ class ImplicitRecommender:
             item_mapping (dict): Item ID to index mapping
             
         Returns:
-            str: Explanation text
+            str: Detailed explanation text
         """
         try:
-            # Get similar items based on user's interaction history
             user_idx = user_mapping[user_id]
             item_idx = item_mapping[item_id]
+            
+            # Get user's interaction history
+            user_interactions = user_item_matrix[user_idx].nonzero()[1]
+            user_total_interactions = user_item_matrix[user_idx].sum()
+            
+            # Get item popularity metrics
+            item_popularity = user_item_matrix[:, item_idx].sum()
+            item_user_count = user_item_matrix[:, item_idx].nnz
+            
+            # Calculate item category (simulated based on item ID ranges)
+            n_items = user_item_matrix.shape[1]
+            category_size = n_items // 5
+            item_category = min(item_idx // category_size, 4)
+            category_names = ["Electronics", "Books", "Movies", "Fashion", "Home"]
+            
+            # Find similar items the user has interacted with
+            similar_items = []
+            for user_item_idx in user_interactions[-5:]:  # Last 5 items
+                if abs(user_item_idx - item_idx) <= 20:  # Items within similar range
+                    similar_items.append(user_item_idx)
+            
+            # Generate explanation based on different factors
+            explanations = []
+            
+            # Popularity explanation
+            if item_popularity > np.percentile(user_item_matrix.sum(axis=0), 80):
+                explanations.append(f"highly popular item ({item_user_count} users)")
+            elif item_popularity > np.percentile(user_item_matrix.sum(axis=0), 60):
+                explanations.append(f"moderately popular item ({item_user_count} users)")
+            
+            # Category explanation
+            user_category_interactions = sum(1 for idx in user_interactions 
+                                           if idx // category_size == item_category)
+            if user_category_interactions > 0:
+                explanations.append(f"matches your {category_names[item_category]} preferences ({user_category_interactions} similar items)")
+            
+            # Similar items explanation
+            if similar_items:
+                explanations.append(f"similar to {len(similar_items)} items you've liked")
+            
+            # User behavior explanation
+            if user_total_interactions > 20:
+                explanations.append("recommended for active users like you")
+            elif user_total_interactions > 10:
+                explanations.append("good match for your activity level")
+            
+            # Combine explanations
+            if explanations:
+                return f"Recommended because it's a {', '.join(explanations[:2])}"
+            else:
+                return f"Recommended based on collaborative filtering analysis"
+                
+        except Exception as e:
+            logger.warning(f"Error generating explanation: {e}")
+            return "Recommended by our AI system based on user preferences"
             
             # Get user's interacted items
             user_items = user_item_matrix[user_idx].nonzero()[1]

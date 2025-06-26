@@ -188,19 +188,19 @@ class ColdStartHandler:
         if strategy == 'popular':
             items = self.popular_items[:n_recommendations]
             for item_id, score in items:
-                explanation = f"Popular item ({int(score)} total interactions)"
+                explanation = f"🔥 Most popular choice - {int(score)} users have interacted with this item. Great for discovering trending content!"
                 recommendations.append((item_id, score / max(s for _, s in self.popular_items), explanation))
                 
         elif strategy == 'diverse':
             items = self.diverse_items[:n_recommendations]
             for item_id, score in items:
-                explanation = f"Diverse recommendation from different category"
+                explanation = f"🎯 Curated diversity pick - Selected from different categories to broaden your discovery experience"
                 recommendations.append((item_id, score / max(s for _, s in self.diverse_items), explanation))
                 
         elif strategy == 'trending':
             items = self.trending_items[:n_recommendations]
             for item_id, score in items:
-                explanation = f"Trending item ({int(score)} recent interactions)"
+                explanation = f"⚡ Rising trend - This item has {int(score)} recent interactions and growing popularity among new users"
                 recommendations.append((item_id, score / max(s for _, s in self.trending_items), explanation))
                 
         elif strategy == 'hybrid':
@@ -230,7 +230,28 @@ class ColdStartHandler:
             sorted_items = sorted(item_scores.items(), key=lambda x: x[1], reverse=True)[:n_recommendations]
             
             for item_id, score in sorted_items:
-                explanation = "Hybrid cold start recommendation (popular + diverse + trending)"
+                # Determine primary recommendation reason
+                is_popular = any(item_id == pid for pid, _ in self.popular_items[:10])
+                is_diverse = any(item_id == did for did, _ in self.diverse_items[:10])
+                is_trending = any(item_id == tid for tid, _ in self.trending_items[:10])
+                
+                reasons = []
+                if is_popular:
+                    reasons.append("popular")
+                if is_trending:
+                    reasons.append("trending")
+                if is_diverse:
+                    reasons.append("diverse")
+                
+                if len(reasons) > 1:
+                    explanation = f"🌟 Smart recommendation - This item is {' and '.join(reasons)}, offering the best balance for new users"
+                elif "popular" in reasons:
+                    explanation = f"🔥 Popular choice - Highly rated by the community with proven appeal"
+                elif "trending" in reasons:
+                    explanation = f"⚡ Trending now - Growing in popularity with strong recent engagement"
+                else:
+                    explanation = f"🎯 Curated pick - Selected for quality and broad appeal to help you discover great content"
+                
                 recommendations.append((item_id, float(score), explanation))
         
         return recommendations

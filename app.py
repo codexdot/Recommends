@@ -194,9 +194,16 @@ def model_training_page():
                     user_item_matrix, test_size=test_size
                 )
                 
+                # Map algorithm display names to internal names
+                algorithm_mapping = {
+                    "Alternating Least Squares (ALS)": "als",
+                    "Bayesian Personalized Ranking (BPR)": "bpr", 
+                    "Logistic Matrix Factorization (LMF)": "lmf"
+                }
+                
                 # Initialize recommender
                 recommender = ImplicitRecommender(
-                    algorithm=algorithm.split()[0].lower(),  # Extract algorithm name
+                    algorithm=algorithm_mapping.get(algorithm, "als"),
                     factors=factors,
                     regularization=regularization,
                     iterations=iterations,
@@ -225,7 +232,7 @@ def model_training_page():
                 with col1:
                     st.metric("Training Time", f"{training_time:.2f}s")
                 with col2:
-                    st.metric("Algorithm", algorithm.split()[0])
+                    st.metric("Algorithm", algorithm_mapping.get(algorithm, "ALS").upper())
                 with col3:
                     st.metric("Factors", factors)
                 

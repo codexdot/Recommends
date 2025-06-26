@@ -5,6 +5,10 @@ from implicit.als import AlternatingLeastSquares
 from implicit.bpr import BayesianPersonalizedRanking
 from implicit.lmf import LogisticMatrixFactorization
 import logging
+import pickle
+import json
+from datetime import datetime
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -462,3 +466,105 @@ class ImplicitRecommender:
         
         item_idx = item_mapping[item_id]
         return self.model.item_factors[item_idx]
+    
+    def save_model(self, filepath=None):
+        """
+        Save the trained model and its configuration to disk.
+        
+        Args:
+            filepath (str): Path to save the model (optional)
+            
+        Returns:
+            str: Path to the saved model file
+        """
+        if not self.model_trained:
+            raise ValueError("No trained model to save. Please train the model first.")
+        
+        if filepath is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = f"recommendation_model_{timestamp}.pkl"
+        
+        # Create model data structure
+        model_data = {
+            'algorithm': self.algorithm,
+            'factors': self.factors,
+            'regularization': self.regularization,
+            'iterations': self.iterations,
+            'alpha': self.alpha,
+            'random_state': self.random_state,
+            'model_trained': self.model_trained,
+            'model': self.model,
+            'save_timestamp': datetime.now().isoformat(),
+            'model_type': type(self.model).__name__
+        }
+        
+        # Save to pickle file
+        with open(filepath, 'wb') as f:
+            pickle.dump(model_data, f)
+        
+        logger.info(f"Model saved to {filepath}")
+        return filepath
+    
+    def load_model(self, filepath):
+        """
+        Load a previously trained model from disk.
+        
+        Args:
+            filepath (str): Path to the saved model file
+            
+        Returns:
+            dict: Model metadata
+        """
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Model file not found: {filepath}")
+        
+        # Load from pickle file
+        with open(filepath, 'rb') as f:
+            model_data = pickle.load(f)
+        
+        # Restore model parameters
+        self.algorithm = model_data['algorithm']
+        self.factors = model_data['factors']
+        self.regularization = model_data['regularization']
+        self.iterations = model_data['iterations']
+        self.alpha = model_data['alpha']
+        self.random_state = model_data['random_state']
+        self.model_trained = model_data['model_trained']
+        self.model = model_data['model']
+        
+        logger.info(f"Model loaded from {filepath}")
+        
+        # Return metadata
+        return {
+            'algorithm': self.algorithm,
+            'factors': self.factors,
+            'save_timestamp': model_data.get('save_timestamp'),
+            'model_type': model_data.get('model_type'),
+            'filepath': filepath
+        }
+    
+    def export_model_info(self):
+        """
+        Export model configuration and statistics as JSON.
+        
+        Returns:
+            dict: Model information
+        """
+        if not self.model_trained:
+            return {'error': 'No trained model available'}
+        
+        model_info = {
+            'algorithm': self.algorithm,
+            'hyperparameters': {
+                'factors': self.factors,
+                'regularization': self.regularization,
+                'iterations': self.iterations,
+                'alpha': self.alpha,
+                'random_state': self.random_state
+            },
+            'model_size_mb': self.get_model_size(),
+            'model_type': type(self.model).__name__,
+            'export_timestamp': datetime.now().isoformat()
+        }
+        
+        return model_info

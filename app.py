@@ -11,7 +11,11 @@ from data_processor import DataProcessor
 from recommender import ImplicitRecommender
 from evaluator import RecommendationEvaluator
 from cold_start_handler import ColdStartHandler
+from model_manager import ModelManager
 from utils import generate_sample_data, format_recommendations
+import os
+import tempfile
+import json
 
 st.set_page_config(
     page_title="Implicit Feedback Recommender System",
@@ -161,6 +165,90 @@ def model_training_page():
         st.warning("Please load data first from the Data Overview page.")
         return
     
+    # Model loading section
+    st.subheader("📂 Load Existing Model")
+    
+    uploaded_model = st.file_uploader(
+        "Upload a model file",
+        type=['pkl', 'zip'],
+        help="Upload a .zip file (complete package) or .pkl file (model only)"
+    )
+    
+    if uploaded_model is not None:
+        # Determine file type and show appropriate options
+        file_extension = uploaded_model.name.split('.')[-1].lower()
+        
+        # Load button based on file type
+        if file_extension == 'zip':
+            st.write("**Complete Model Package Detected**")
+            if st.button("Load Complete Package", type="primary"):
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+                        tmp_file.write(uploaded_model.read())
+                        tmp_path = tmp_file.name
+                    
+                    manager = ModelManager()
+                    model_package = manager.load_complete_model(tmp_path)
+                    
+                    # Set up session state with all components
+                    st.session_state.recommender = model_package['recommender']
+                    st.session_state.user_mapping = model_package['user_mapping']
+                    st.session_state.item_mapping = model_package['item_mapping']
+                    st.session_state.user_item_matrix = model_package['user_item_matrix']
+                    st.session_state.model_trained = True
+                    
+                    if model_package['cold_start_handler']:
+                        st.session_state.cold_start_handler = model_package['cold_start_handler']
+                    
+                    if model_package['evaluation_results']:
+                        st.session_state.evaluation_results = model_package['evaluation_results']
+                    
+                    st.success("Complete model package loaded successfully!")
+                    
+                    # Display package info
+                    metadata = model_package['metadata']
+                    col1_info, col2_info, col3_info = st.columns(3)
+                    with col1_info:
+                        st.metric("Algorithm", metadata['model_algorithm'].upper())
+                    with col2_info:
+                        st.metric("Users", metadata['n_users'])
+                    with col3_info:
+                        st.metric("Items", metadata['n_items'])
+                    
+                    os.unlink(tmp_path)
+                    
+                except Exception as e:
+                    st.error(f"Error loading complete package: {e}")
+        else:
+            st.write("**Model File Detected**")
+            if st.button("Load Model", type="secondary"):
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pkl') as tmp_file:
+                        tmp_file.write(uploaded_model.read())
+                        tmp_path = tmp_file.name
+                    
+                    loaded_recommender = ImplicitRecommender()
+                    model_metadata = loaded_recommender.load_model(tmp_path)
+                    
+                    st.session_state.recommender = loaded_recommender
+                    st.session_state.model_trained = True
+                    
+                    st.success("Model loaded successfully!")
+                    st.warning("Note: Only the model was loaded. Train with data to enable recommendations.")
+                    
+                    col1_info, col2_info = st.columns(2)
+                    with col1_info:
+                        st.metric("Algorithm", model_metadata['algorithm'].upper())
+                    with col2_info:
+                        st.metric("Factors", model_metadata['factors'])
+                    
+                    os.unlink(tmp_path)
+                    
+                except Exception as e:
+                    st.error(f"Error loading model: {e}")
+    
+    st.divider()
+    
     st.subheader("Training Configuration")
     
     col1, col2 = st.columns(2)
@@ -241,6 +329,95 @@ def model_training_page():
                     st.metric("Algorithm", algorithm_mapping.get(algorithm, "ALS").upper())
                 with col3:
                     st.metric("Factors", factors)
+                
+                # Model persistence section
+                st.subheader("💾 Save Complete Model Package")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Save Complete Model Package**")
+                    st.caption("Includes model, mappings, and all components")
+                    
+                    package_filename = st.text_input(
+                        "Package filename (optional)", 
+                        placeholder="my_recommendation_system.zip",
+                        key="save_package_filename"
+                    )
+                    
+                    if st.button("Save Complete Package", type="primary"):
+                        try:
+                            from model_manager import ModelManager
+                            manager = ModelManager()
+                            
+                            # Get evaluation results if available
+                            eval_results = st.session_state.get('evaluation_results', None)
+                            
+                            saved_path = manager.save_complete_model(
+                                recommender=st.session_state.recommender,
+                                user_mapping=st.session_state.user_mapping,
+                                item_mapping=st.session_state.item_mapping,
+                                user_item_matrix=st.session_state.user_item_matrix,
+                                cold_start_handler=st.session_state.get('cold_start_handler', None),
+                                evaluation_results=eval_results,
+                                filename=package_filename
+                            )
+                            st.success(f"Complete model package saved as: {saved_path}")
+                            
+                            # Provide download link
+                            with open(saved_path, 'rb') as f:
+                                st.download_button(
+                                    label="Download Complete Package",
+                                    data=f.read(),
+                                    file_name=os.path.basename(saved_path),
+                                    mime="application/zip",
+                                    key="download_package"
+                                )
+                        except Exception as e:
+                            st.error(f"Error saving complete package: {e}")
+                
+                with col2:
+                    st.write("**Quick Model Save**")
+                    st.caption("Save just the trained model")
+                    
+                    if st.button("Save Model Only", type="secondary"):
+                        try:
+                            import datetime
+                            saved_path = st.session_state.recommender.save_model()
+                            st.success(f"Model saved as: {saved_path}")
+                            
+                            # Provide download link
+                            with open(saved_path, 'rb') as f:
+                                st.download_button(
+                                    label="Download Model File",
+                                    data=f.read(),
+                                    file_name=saved_path,
+                                    mime="application/octet-stream",
+                                    key="download_model_only"
+                                )
+                        except Exception as e:
+                            st.error(f"Error saving model: {e}")
+                    
+                    st.write("**Export Model Information**")
+                    
+                    if st.button("Export Model Info"):
+                        try:
+                            model_info = st.session_state.recommender.export_model_info()
+                            st.json(model_info)
+                            
+                            # Provide download for JSON
+                            import json
+                            import datetime
+                            json_str = json.dumps(model_info, indent=2)
+                            st.download_button(
+                                label="Download Model Info (JSON)",
+                                data=json_str,
+                                file_name=f"model_info_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                                mime="application/json",
+                                key="download_info"
+                            )
+                        except Exception as e:
+                            st.error(f"Error exporting model info: {e}")
                 
             except Exception as e:
                 st.error(f"Error during training: {str(e)}")

@@ -111,13 +111,13 @@ This is a Streamlit-based web application that implements an implicit feedback r
 
 ## Recent Changes
 
-- Added comprehensive model persistence functionality with save/load capabilities
-- Implemented ModelManager class for complete model package management
-- Enhanced recommendation explanations with emojis and detailed reasoning
+- Removed all model saving, downloading, and uploading functionality per user request
+- Simplified data source selection to only include sample data generation and CSV upload
+- Cleaned up imports and removed unused model management components
+- Streamlined interface to focus purely on training, evaluation, and recommendation generation
+- Enhanced recommendation explanations with detailed reasoning and confidence metrics
 - Fixed index bounds errors and data serialization issues for stability
-- Added user-friendly interface for saving and loading trained models
-- Integrated cold start handler with multi-strategy recommendations
-- Created complete model packages including mappings and components
+- Integrated cold start handler with multi-strategy recommendations for new users
 
 ## User Preferences
 

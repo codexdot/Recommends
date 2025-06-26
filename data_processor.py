@@ -98,12 +98,12 @@ class DataProcessor:
         user_indices, item_indices = user_item_matrix.nonzero()
         ratings = user_item_matrix.data
         
-        # Split indices
+        # Split indices - use simple random split to avoid stratification issues
+        # with users who have very few interactions
         train_idx, test_idx = train_test_split(
             range(len(user_indices)),
             test_size=test_size,
-            random_state=random_state,
-            stratify=user_indices  # Stratify by user to ensure each user has some training data
+            random_state=random_state
         )
         
         # Create train matrix

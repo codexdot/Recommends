@@ -123,12 +123,36 @@ class ImplicitRecommender:
         try:
             # Convert numpy types to Python native types for compatibility
             user_idx_int = int(user_idx)
+            
+            # Validate that user_idx is within bounds
+            if user_idx_int >= user_item_matrix.shape[0]:
+                logger.error(f"User index {user_idx_int} out of bounds for matrix shape {user_item_matrix.shape}")
+                return self._get_cold_start_recommendations(
+                    user_item_matrix, item_mapping, n_recommendations, include_explanations
+                )
+            
             recommended_items, scores = self.model.recommend(
                 user_idx_int, 
                 user_item_matrix[user_idx_int],
                 N=n_recommendations,
                 filter_already_liked_items=True
             )
+            
+            # Validate recommended item indices
+            max_item_idx = len(item_mapping) - 1
+            valid_recommendations = []
+            valid_scores = []
+            
+            for item_idx, score in zip(recommended_items, scores):
+                if 0 <= item_idx <= max_item_idx:
+                    valid_recommendations.append(item_idx)
+                    valid_scores.append(score)
+                else:
+                    logger.warning(f"Item index {item_idx} out of bounds (max: {max_item_idx})")
+            
+            recommended_items = np.array(valid_recommendations)
+            scores = np.array(valid_scores)
+            
         except Exception as e:
             logger.error(f"Error generating recommendations: {e}")
             return self._get_cold_start_recommendations(
@@ -163,7 +187,7 @@ class ImplicitRecommender:
     def _get_cold_start_recommendations(self, user_item_matrix, item_mapping, 
                                       n_recommendations, include_explanations):
         """
-        Generate recommendations for cold start users based on item popularity.
+        Enhanced cold start recommendations using multiple strategies.
         
         Args:
             user_item_matrix (csr_matrix): User-item interaction matrix
@@ -174,28 +198,64 @@ class ImplicitRecommender:
         Returns:
             list: List of (item_id, score, explanation) tuples
         """
-        # Calculate item popularity
+        # Strategy 1: Item popularity
         item_popularity = np.array(user_item_matrix.sum(axis=0)).flatten()
         
-        # Get top popular items
-        top_item_indices = np.argsort(item_popularity)[::-1][:n_recommendations]
+        # Strategy 2: Item diversity (items with balanced user engagement)
+        item_user_counts = np.array((user_item_matrix > 0).sum(axis=0)).flatten()
+        item_avg_rating = np.divide(item_popularity, item_user_counts, 
+                                   out=np.zeros_like(item_popularity), 
+                                   where=item_user_counts!=0)
+        
+        # Strategy 3: Recent popularity (if we had timestamps, but for now use recency proxy)
+        # Use items that appear in the latter part of the matrix as a proxy
+        n_users = user_item_matrix.shape[0]
+        recent_users = user_item_matrix[int(n_users*0.7):, :]  # Last 30% of users
+        recent_popularity = np.array(recent_users.sum(axis=0)).flatten()
+        
+        # Combine strategies with weights
+        popularity_weight = 0.5
+        diversity_weight = 0.3
+        recency_weight = 0.2
+        
+        # Normalize each score to [0, 1]
+        norm_popularity = item_popularity / (np.max(item_popularity) + 1e-8)
+        norm_diversity = item_avg_rating / (np.max(item_avg_rating) + 1e-8)
+        norm_recency = recent_popularity / (np.max(recent_popularity) + 1e-8)
+        
+        # Combined score
+        combined_score = (popularity_weight * norm_popularity + 
+                         diversity_weight * norm_diversity + 
+                         recency_weight * norm_recency)
+        
+        # Get top items based on combined score
+        top_item_indices = np.argsort(combined_score)[::-1][:n_recommendations]
         
         reverse_item_mapping = {idx: item for item, idx in item_mapping.items()}
         
         recommendations = []
         for item_idx in top_item_indices:
+            # Ensure item_idx is valid
+            if item_idx >= len(reverse_item_mapping):
+                continue
+                
+            if item_idx not in reverse_item_mapping:
+                continue
+                
             item_id = reverse_item_mapping[item_idx]
-            popularity_score = item_popularity[item_idx]
-            
-            # Normalize popularity score to [0, 1]
-            max_popularity = np.max(item_popularity)
-            normalized_score = popularity_score / max_popularity if max_popularity > 0 else 0
+            score = combined_score[item_idx]
             
             explanation = None
             if include_explanations:
-                explanation = f"Popular item (interacted with by {int(popularity_score)} users)"
+                pop_count = int(item_popularity[item_idx])
+                user_count = int(item_user_counts[item_idx])
+                avg_rating = item_avg_rating[item_idx]
+                
+                explanation = (f"Cold start recommendation: Popular item "
+                             f"({pop_count} interactions from {user_count} users, "
+                             f"avg rating: {avg_rating:.2f})")
             
-            recommendations.append((item_id, float(normalized_score), explanation))
+            recommendations.append((item_id, float(score), explanation))
         
         return recommendations
     

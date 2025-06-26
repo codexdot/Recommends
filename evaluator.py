@@ -99,10 +99,10 @@ class RecommendationEvaluator:
                     logger.warning(f"Error evaluating user {user_idx}: {e}")
                     continue
             
-            # Average metrics
-            results[f'precision_at_{k}'] = np.mean(precision_scores) if precision_scores else 0.0
-            results[f'recall_at_{k}'] = np.mean(recall_scores) if recall_scores else 0.0
-            results[f'ndcg_at_{k}'] = np.mean(ndcg_scores) if ndcg_scores else 0.0
+            # Average metrics - convert to Python native types
+            results[f'precision_at_{k}'] = float(np.mean(precision_scores)) if precision_scores else 0.0
+            results[f'recall_at_{k}'] = float(np.mean(recall_scores)) if recall_scores else 0.0
+            results[f'ndcg_at_{k}'] = float(np.mean(ndcg_scores)) if ndcg_scores else 0.0
             
             logger.info(f"k={k}: Precision={results[f'precision_at_{k}']:.4f}, "
                        f"Recall={results[f'recall_at_{k}']:.4f}, "
@@ -197,7 +197,7 @@ class RecommendationEvaluator:
                 logger.warning(f"Error calculating coverage for user {user_id}: {e}")
                 continue
         
-        coverage = len(recommended_items) / total_items if total_items > 0 else 0.0
+        coverage = float(len(recommended_items) / total_items) if total_items > 0 else 0.0
         return coverage
     
     def _calculate_diversity(self, recommender, train_matrix, user_mapping, item_mapping, n_users=50):
@@ -259,7 +259,7 @@ class RecommendationEvaluator:
                 logger.warning(f"Error calculating diversity for user {user_id}: {e}")
                 continue
         
-        return np.mean(diversity_scores) if diversity_scores else 0.0
+        return float(np.mean(diversity_scores)) if diversity_scores else 0.0
     
     def evaluate_cold_start(self, recommender, train_matrix, test_matrix, 
                            user_mapping, item_mapping, cold_start_threshold=5):
@@ -334,9 +334,9 @@ class RecommendationEvaluator:
                 continue
         
         results = {
-            'cold_start_precision': np.mean(precision_scores) if precision_scores else 0.0,
-            'cold_start_recall': np.mean(recall_scores) if recall_scores else 0.0,
-            'cold_start_coverage': len(recommended_items) / len(item_mapping) if item_mapping else 0.0
+            'cold_start_precision': float(np.mean(precision_scores)) if precision_scores else 0.0,
+            'cold_start_recall': float(np.mean(recall_scores)) if recall_scores else 0.0,
+            'cold_start_coverage': float(len(recommended_items) / len(item_mapping)) if item_mapping else 0.0
         }
         
         logger.info(f"Cold start evaluation: Precision={results['cold_start_precision']:.4f}, "

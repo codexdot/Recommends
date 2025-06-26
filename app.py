@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from data_processor import DataProcessor
 from recommender import ImplicitRecommender
 from evaluator import RecommendationEvaluator
+from cold_start_handler import ColdStartHandler
 from utils import generate_sample_data, format_recommendations
 
 st.set_page_config(
@@ -107,11 +108,11 @@ def data_overview_page():
         with col1:
             st.metric("Total Interactions", f"{len(df):,}")
         with col2:
-            st.metric("Unique Users", f"{df['user_id'].nunique():,}")
+            st.metric("Unique Users", f"{len(df['user_id'].unique()):,}")
         with col3:
-            st.metric("Unique Items", f"{df['item_id'].nunique():,}")
+            st.metric("Unique Items", f"{len(df['item_id'].unique()):,}")
         with col4:
-            sparsity = 1 - (len(df) / (df['user_id'].nunique() * df['item_id'].nunique()))
+            sparsity = 1 - (len(df) / (len(df['user_id'].unique()) * len(df['item_id'].unique())))
             st.metric("Sparsity", f"{sparsity:.2%}")
         
         # Data preview
@@ -215,8 +216,13 @@ def model_training_page():
                 recommender.fit(train_matrix)
                 training_time = time.time() - start_time
                 
+                # Train cold start handler
+                cold_start_handler = ColdStartHandler()
+                cold_start_handler.fit(train_matrix, user_mapping, item_mapping)
+                
                 # Store in session state
                 st.session_state.recommender = recommender
+                st.session_state.cold_start_handler = cold_start_handler
                 st.session_state.user_item_matrix = user_item_matrix
                 st.session_state.train_matrix = train_matrix
                 st.session_state.test_matrix = test_matrix
@@ -253,27 +259,54 @@ def recommendations_page():
         
         # User selection
         available_users = list(st.session_state.user_mapping.keys())
-        selected_user = st.selectbox("Select User ID:", available_users)
+        user_options = ["New User (Cold Start)"] + available_users
+        selected_user_option = st.selectbox("Select User:", user_options)
         
         num_recommendations = st.slider("Number of Recommendations:", 1, 20, 10)
         
         include_explanations = st.checkbox("Include Explanations", value=True)
         
+        # Cold start strategy selection
+        cold_start_strategy = "Hybrid"  # Default value
+        if selected_user_option == "New User (Cold Start)":
+            st.subheader("Cold Start Strategy")
+            cold_start_strategy = st.selectbox(
+                "Recommendation Strategy:",
+                ["Hybrid", "Popular Items", "Diverse Selection", "Trending Items"]
+            )
+        
         if st.button("Generate Recommendations", type="primary"):
             with st.spinner("Generating recommendations..."):
                 try:
-                    # Generate recommendations
-                    recommendations = st.session_state.recommender.recommend_for_user(
-                        user_id=selected_user,
-                        user_item_matrix=st.session_state.user_item_matrix,
-                        user_mapping=st.session_state.user_mapping,
-                        item_mapping=st.session_state.item_mapping,
-                        n_recommendations=num_recommendations,
-                        include_explanations=include_explanations
-                    )
-                    
-                    st.session_state.current_recommendations = recommendations
-                    st.session_state.current_user = selected_user
+                    if selected_user_option == "New User (Cold Start)":
+                        # Use cold start handler
+                        strategy_map = {
+                            "Hybrid": "hybrid",
+                            "Popular Items": "popular", 
+                            "Diverse Selection": "diverse",
+                            "Trending Items": "trending"
+                        }
+                        
+                        recommendations = st.session_state.cold_start_handler.recommend_for_cold_start_user(
+                            n_recommendations=num_recommendations,
+                            strategy=strategy_map.get(cold_start_strategy, "hybrid")
+                        )
+                        
+                        st.session_state.current_recommendations = recommendations
+                        st.session_state.current_user = "New User (Cold Start)"
+                    else:
+                        # Regular user recommendations
+                        recommendations = st.session_state.recommender.recommend_for_user(
+                            user_id=selected_user_option,
+                            user_item_matrix=st.session_state.user_item_matrix,
+                            user_mapping=st.session_state.user_mapping,
+                            item_mapping=st.session_state.item_mapping,
+                            n_recommendations=num_recommendations,
+                            include_explanations=include_explanations
+                        )
+                        
+                        st.session_state.current_recommendations = recommendations
+                        st.session_state.current_user = selected_user_option
                     
                 except Exception as e:
                     st.error(f"Error generating recommendations: {str(e)}")
@@ -462,9 +495,37 @@ def metrics_page():
     st.plotly_chart(fig_scalability, use_container_width=True)
     
     # Cold start performance
-    if st.session_state.evaluation_complete:
-        st.subheader("Cold Start Analysis")
+    st.subheader("Cold Start Analysis")
+    
+    if 'cold_start_handler' in st.session_state:
+        # Display cold start handler statistics
+        cold_start_stats = st.session_state.cold_start_handler.get_cold_start_statistics()
         
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Popular Items Pool", f"{cold_start_stats['popular_items_count']:,}")
+            st.caption("Items for popularity-based recommendations")
+        
+        with col2:
+            st.metric("Diverse Items Pool", f"{cold_start_stats['diverse_items_count']:,}")
+            st.caption("Items for diversity-based recommendations")
+        
+        with col3:
+            st.metric("Trending Items Pool", f"{cold_start_stats['trending_items_count']:,}")
+            st.caption("Items for trending recommendations")
+        
+        col4, col5 = st.columns(2)
+        
+        with col4:
+            st.metric("User Clusters", f"{cold_start_stats['user_clusters']:,}")
+            st.caption("User behavior clusters")
+        
+        with col5:
+            st.metric("Item Clusters", f"{cold_start_stats['item_clusters']:,}")
+            st.caption("Item similarity clusters")
+    
+    if st.session_state.evaluation_complete:
         # Analyze cold start users (users with few interactions)
         interactions_per_user = st.session_state.interactions_df['user_id'].value_counts()
         cold_start_users = interactions_per_user[interactions_per_user <= 5].index.tolist()
@@ -485,11 +546,11 @@ def metrics_page():
     config_data = {
         'Parameter': ['Algorithm', 'Factors', 'Regularization', 'Iterations', 'Alpha'],
         'Value': [
-            st.session_state.recommender.algorithm,
-            st.session_state.recommender.factors,
-            st.session_state.recommender.regularization,
-            st.session_state.recommender.iterations,
-            st.session_state.recommender.alpha
+            str(st.session_state.recommender.algorithm),
+            str(st.session_state.recommender.factors),
+            str(st.session_state.recommender.regularization),
+            str(st.session_state.recommender.iterations),
+            str(st.session_state.recommender.alpha)
         ]
     }
     

@@ -6,7 +6,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def generate_sample_data(n_users=2000, n_items=4500, n_interactions=50000, 
+def generate_sample_data(n_users=2094, n_items=4577, n_interactions=51024, 
                         sparsity=0.95, random_state=42):
     """
     Generate synthetic implicit feedback data for demonstration.

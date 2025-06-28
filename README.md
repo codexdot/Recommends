@@ -1,5 +1,13 @@
 # Recommends: Implicit Feedback Recommendation System
 
+---
+
+## Project Links
+
+- [GitHub Repository](https://github.com/codexdot/Recommends)
+- Live on: 
+---
+
 ## Overview
 
 **Recommends** is a modular, production-ready Streamlit web application for building, training, and evaluating recommendation systems based on implicit user feedback (such as views, clicks, and purchases). It supports multiple matrix factorization algorithms and provides a full workflow from data ingestion to model evaluation and recommendation visualization.
@@ -128,12 +136,7 @@ CSV file must include columns:
 
 ## License
 
-No explicit license found. Please contact the repository owner for usage permissions.
+This project is open source and available under the MIT License.
 
----
-
-## Project Links
-
-- [GitHub Repository](https://github.com/codexdot/Recommends)
 
 ---

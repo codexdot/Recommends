@@ -66,6 +66,8 @@ streamlit run app.py
 ```
 - Or, deploy on [Replit](https://replit.com/) (see `.replit` for autoscale config).
 
+- Or, the deployed version, live on: https://recommends.onrender.com/
+
 ### 2. Data Format
 
 CSV file must include columns:  
